@@ -2,11 +2,26 @@
 package client
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	//	"net/http"
+	"fmt"
 	"net/url"
 )
 
+type UserCode struct {
+	Code      string
+	Key       string
+	Str_alert string
+}
+type UserInfo struct {
+	User_id         string
+	User_name       string
+	User_mail       string
+	User_nick       string
+	User_time       string
+	User_time_login string
+}
 type SSOClient struct {
 	SClient *client
 }
@@ -25,6 +40,49 @@ type Login struct {
 	Is_login string `json:"is_login" yaml:"is_login"`
 	Uid      string `json:"u_id,omitempty" yaml:"u_id,omitempty"`
 	Uname    string `json:"u_name,omitempty" yaml:"u_name,omitempty"`
+}
+
+func convertBase642String(src string) string {
+	des, err := base64.StdEncoding.DecodeString(src)
+	if err != nil {
+		return ""
+	}
+	return string(des)
+}
+
+//get user info by id
+
+func (c *SSOClient) GetUserInfo(app_id string, app_key string, args string) (UserInfo, error) {
+	query := fmt.Sprintf("?mod=user&%s&app_id=%s&app_key=%s", args, app_id, app_key)
+	body, _, err := c.SClient.do("GET", "/api/api.php"+query, nil, false, nil)
+	var code UserCode
+	var info UserInfo
+	if err != nil {
+		return info, err
+	}
+	err = json.Unmarshal(body, &code)
+	if err != nil {
+		return info, err
+	}
+	if code.Str_alert != "y010102" {
+		return info, newError(1, []byte("no such user"))
+	}
+	decode := fmt.Sprintf("?mod=code&act_get=decode&app_id=%s&app_key=%s&code=%s&key=%s", app_id, app_key, code.Code, code.Key)
+	body, _, err = c.SClient.do("GET", "/api/api.php"+decode, nil, false, nil)
+	if err != nil {
+		return info, err
+	}
+	err = json.Unmarshal(body, &info)
+	if err != nil {
+		return info, err
+	}
+	info.User_id = convertBase642String(info.User_id)
+	info.User_mail = convertBase642String(info.User_mail)
+	info.User_name = convertBase642String(info.User_name)
+	info.User_nick = convertBase642String(info.User_nick)
+	info.User_time = convertBase642String(info.User_time)
+	info.User_time_login = convertBase642String(info.User_time_login)
+	return info, err
 }
 
 //func (s *SSOClient) IsLogin(path string, data interface{}) (string, error) {
